@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+
+
+// The greeting service definition.
+service ImageTest {
+  // Sends a greeting
+  rpc Analyse (stream Msg) returns (stream Msg) {}
+}
+
+// The request message containing the image.
+message Msg{
+  bytes img = 1;
+}
