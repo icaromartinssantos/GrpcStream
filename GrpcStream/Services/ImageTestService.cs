@@ -1,28 +1,39 @@
 ﻿using Grpc.Core;
+
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
 namespace GrpcStream.Services
 {
-    public static class ImageTestService
+    public class ImageTestService : ImageTest.ImageTestBase
     {
+        private FileEventDispatcher events;
 
-        public static void StartServer()
+        public ImageTestService(FileEventDispatcher events)
         {
-            Server server = new Server
+            this.events = events;
+        }
+
+        public override async Task Analyse(IAsyncStreamReader<Msg> requestStream,
+                                             IServerStreamWriter<Msg> responseStream,
+                                             ServerCallContext context)
+        {
+
+            while (await requestStream.MoveNext())
             {
-                Services = { ImageTest.BindService(new ImageTestServiceImpl()) },
-                Ports = { new ServerPort("localhost", 5001, ServerCredentials.Insecure) }
-            };
-            server.Start();
-
-            Console.WriteLine("RouteGuide server listening on port " + 5001);
-            Console.WriteLine("Press any key to stop the server...");
-            Console.ReadKey();
-
-            server.ShutdownAsync().Wait();
+                try
+                {
+                    var barr = requestStream.Current.Img.ToByteArray();
+                    events.OnSentEvent(barr);
+                }
+                catch (IOException ex)
+                {
+                    Console.WriteLine("Exit connection Stream");
+                }
+            }
         }
     }
 }

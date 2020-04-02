@@ -1,27 +1,23 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
+using Grpc.Core;
 using GrpcStream.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using static GrpcStream.Services.FileEventDispatcher;
 
 namespace GrpcStream
 {
     public class Startup
     {
-        // This method gets called by the runtime. Use this method to add services to the container.
-        // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddGrpc();
+            services.AddSingleton<FileEventDispatcher>();
         }
 
-        // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, FileEventDispatcher events)
         {
             if (env.IsDevelopment())
             {
@@ -32,14 +28,69 @@ namespace GrpcStream
 
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapGrpcService<ImageTestServiceImpl>();
+                endpoints.MapGet("/video.mp4", async context =>
+                {
+                    long size = -1;
+                    context.Response.Headers["Content-Type"] = "application/octet-stream";
+                    context.Response.Headers["Connection"] = "close";
+                    contentSent disponibilizaVideo = async (s) =>
+                    {
+                        
+                        await context.Response.BodyWriter.WriteAsync(s);
+                        size = s.Length;
+                    };
+
+                    events.ContentSent += disponibilizaVideo;
+                    while (!context.RequestAborted.IsCancellationRequested)
+                    {
+                        await Task.Delay(500);
+                    }
+                    events.ContentSent -= disponibilizaVideo;
+                });
 
                 endpoints.MapGet("/", async context =>
                 {
-                    
-                    await context.Response.WriteAsync("Communication with gRPC endpoints must be made through a gRPC client. To learn how to create a client, visit: https://go.microsoft.com/fwlink/?linkid=2086909");
+                    await context.Response.WriteAsync(@"
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title></title>
+                        </head>
+                        <body>
+                            <div id=""videoContainer"">
+
+                            </div>
+                            <button id=""btnLive"">Live</button>
+                            <script>
+
+                                var btnLive = document.getElementById(""btnLive"");
+                                var videoContainer = document.getElementById(""videoContainer"");
+                                btnLive.addEventListener('click', function () {
+                                    setTimeout(function () { addVideo('./video.mp4'); }, 500);
+                                });
+
+                                var addVideo = function (url) {
+                                    var video = document.createElement('video');
+                                    video.src = url;
+                                    video.autoplay = true;
+                                    video.setAttribute(""width"", ""320"");
+                                    video.setAttribute(""height"", ""240"");
+                                    videoContainer.appendChild(video);
+                                };
+
+                            </script>
+                        </body>
+                        </html>");
                 });
             });
+
+            Server server = new Server
+            {
+                Services = { ImageTest.BindService(new ImageTestService(events)) },
+                Ports = { new ServerPort("localhost", 5001, ServerCredentials.Insecure) }
+            };
+
+            server.Start();
         }
     }
 }
