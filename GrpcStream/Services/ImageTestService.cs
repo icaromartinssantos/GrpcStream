@@ -12,6 +12,11 @@ namespace GrpcStream.Services
     {
         private FileEventDispatcher events;
 
+        public ImageTestService()
+        {
+
+        }
+
         public ImageTestService(FileEventDispatcher events)
         {
             this.events = events;
@@ -26,14 +31,19 @@ namespace GrpcStream.Services
             {
                 try
                 {
-                    var barr = requestStream.Current.Img.ToByteArray();
-                    events.OnSentEvent(barr);
+                    if (!context.CancellationToken.IsCancellationRequested) 
+                    {
+                        var barr = requestStream.Current.Img.ToByteArray();
+                        events.OnSentEvent(barr);
+                    }
                 }
                 catch (IOException ex)
                 {
                     Console.WriteLine("Exit connection Stream");
                 }
             }
+
+            
         }
     }
 }

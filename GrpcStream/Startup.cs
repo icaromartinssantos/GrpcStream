@@ -1,4 +1,7 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.IO;
+using System.Text;
+using System.Threading.Tasks;
 using Grpc.Core;
 using GrpcStream.Services;
 using Microsoft.AspNetCore.Builder;
@@ -15,6 +18,17 @@ namespace GrpcStream
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddSingleton<FileEventDispatcher>();
+            services.AddGrpc(opts =>
+
+            {
+
+                opts.EnableDetailedErrors = true;
+
+                opts.MaxReceiveMessageSize = 4096;
+
+                opts.MaxSendMessageSize = 4096;
+
+            });
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env, FileEventDispatcher events)
@@ -30,22 +44,27 @@ namespace GrpcStream
             {
                 endpoints.MapGet("/video.mp4", async context =>
                 {
-                    long size = -1;
-                    context.Response.Headers["Content-Type"] = "application/octet-stream";
-                    context.Response.Headers["Connection"] = "close";
-                    contentSent disponibilizaVideo = async (s) =>
+                    try
                     {
-                        
-                        await context.Response.BodyWriter.WriteAsync(s);
-                        size = s.Length;
-                    };
+                        long size = -1;
+                        context.Response.Headers["Content-Type"] = "video/mp4";
+                        contentSent disponibilizaVideo = async (s) =>
+                        {
+                            await context.Response.BodyWriter.WriteAsync(s);
+                            size = s.Length;
+                        };
 
-                    events.ContentSent += disponibilizaVideo;
-                    while (!context.RequestAborted.IsCancellationRequested)
-                    {
-                        await Task.Delay(500);
+                        events.ContentSent += disponibilizaVideo;
+                        while (!context.RequestAborted.IsCancellationRequested)
+                        {
+                            await Task.Delay(10000);
+                        }
+                        events.ContentSent -= disponibilizaVideo;
                     }
-                    events.ContentSent -= disponibilizaVideo;
+                    catch (Exception e )
+                    {
+                        Console.WriteLine(e.Message);
+                    }
                 });
 
                 endpoints.MapGet("/", async context =>
@@ -61,12 +80,13 @@ namespace GrpcStream
 
                             </div>
                             <button id=""btnLive"">Live</button>
+
                             <script>
 
                                 var btnLive = document.getElementById(""btnLive"");
                                 var videoContainer = document.getElementById(""videoContainer"");
                                 btnLive.addEventListener('click', function () {
-                                    setTimeout(function () { addVideo('./video.mp4'); }, 500);
+                                    setTimeout(function () { addVideo('/video.mp4'); }, 500);
                                 });
 
                                 var addVideo = function (url) {
